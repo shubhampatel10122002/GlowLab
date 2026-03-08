@@ -3,7 +3,7 @@ import { SellerResponse, NegotiationMessage } from './types';
 
 const MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions';
 const SELLER_MODEL = 'mistral-large-latest';
-const BUYER_MODEL = 'mistral-medium-latest';
+const BUYER_MODEL = 'mistral-small-latest';
 
 interface MistralMessage {
   role: 'system' | 'user' | 'assistant';
