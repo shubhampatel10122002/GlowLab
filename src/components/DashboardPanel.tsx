@@ -1,6 +1,9 @@
 'use client';
 
-import { NegotiationMessage } from '@/lib/types';
+import { useState } from 'react';
+import { NegotiationMessage, Product, BrandPolicies } from '@/lib/types';
+import CatalogPanel from './CatalogPanel';
+import PoliciesPanel from './PoliciesPanel';
 
 const ACTION_LABELS: Record<string, { label: string; color: string }> = {
   recommend: { label: 'Recommend', color: 'bg-blue-500/20 text-blue-400' },
@@ -18,14 +21,38 @@ const STATUS_STYLES: Record<string, { label: string; color: string }> = {
   retained: { label: 'Customer Retained', color: 'text-blue-400' },
 };
 
+type Tab = 'activity' | 'catalog' | 'policies';
+
 interface DashboardPanelProps {
   messages: NegotiationMessage[];
   isNegotiating: boolean;
+  products: Product[];
+  policies: BrandPolicies;
+  onUpdateProduct: (index: number, product: Product) => void;
+  onAddProduct: (product: Product) => void;
+  onRemoveProduct: (index: number) => void;
+  onUpdatePolicies: (policies: BrandPolicies) => void;
 }
 
-export default function DashboardPanel({ messages, isNegotiating }: DashboardPanelProps) {
+export default function DashboardPanel({
+  messages,
+  isNegotiating,
+  products,
+  policies,
+  onUpdateProduct,
+  onAddProduct,
+  onRemoveProduct,
+  onUpdatePolicies,
+}: DashboardPanelProps) {
+  const [activeTab, setActiveTab] = useState<Tab>('activity');
   const sellerMessages = messages.filter(m => m.role === 'seller' && m.sellerData);
   const latestSeller = sellerMessages[sellerMessages.length - 1]?.sellerData;
+
+  const tabs: { id: Tab; label: string }[] = [
+    { id: 'activity', label: 'Live Activity' },
+    { id: 'catalog', label: 'Products' },
+    { id: 'policies', label: 'Policies' },
+  ];
 
   return (
     <div className="flex flex-col h-full bg-[#0a0a0a] text-white">
@@ -37,7 +64,7 @@ export default function DashboardPanel({ messages, isNegotiating }: DashboardPan
             Seller Agent Dashboard
           </h2>
         </div>
-        {latestSeller && (
+        {latestSeller && activeTab === 'activity' && (
           <div className="flex items-center gap-4 mt-3">
             <div className={`text-xs font-medium ${STATUS_STYLES[latestSeller.deal_status]?.color || 'text-white/40'}`}>
               {STATUS_STYLES[latestSeller.deal_status]?.label || latestSeller.deal_status}
@@ -58,112 +85,150 @@ export default function DashboardPanel({ messages, isNegotiating }: DashboardPan
         )}
       </div>
 
-      {/* Activity Feed */}
-      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-        {messages.length === 0 && !isNegotiating && (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <div className="text-white/20 text-sm">No active negotiations</div>
-              <div className="text-white/10 text-xs mt-1">
-                Activity will appear here when a negotiation starts
-              </div>
-            </div>
-          </div>
-        )}
+      {/* Tabs */}
+      <div className="flex border-b border-white/[0.06]">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex-1 px-4 py-2.5 text-xs font-medium transition-colors relative ${
+              activeTab === tab.id
+                ? 'text-white/80'
+                : 'text-white/25 hover:text-white/45'
+            }`}
+          >
+            {tab.label}
+            {activeTab === tab.id && (
+              <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-white/30" />
+            )}
+            {tab.id === 'activity' && isNegotiating && (
+              <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-amber-400 inline-block animate-pulse" />
+            )}
+          </button>
+        ))}
+      </div>
 
-        {messages.map((msg, i) => (
-          <div key={i} className="animate-fadeIn">
-            {msg.role === 'seller' && msg.sellerData ? (
-              <div className="space-y-2">
-                {/* Seller reasoning card */}
-                <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-5 h-5 rounded-full bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center text-[10px] font-bold">
-                        S
+      {/* Tab Content */}
+      <div className="flex-1 overflow-hidden">
+        {activeTab === 'activity' && (
+          <div className="h-full overflow-y-auto px-6 py-4 space-y-4">
+            {messages.length === 0 && !isNegotiating && (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <div className="text-white/20 text-sm">No active negotiations</div>
+                  <div className="text-white/10 text-xs mt-1">
+                    Activity will appear here when a negotiation starts
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {messages.map((msg, i) => (
+              <div key={i} className="animate-fadeIn">
+                {msg.role === 'seller' && msg.sellerData ? (
+                  <div className="space-y-2">
+                    <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-5 h-5 rounded-full bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center text-[10px] font-bold">
+                            S
+                          </div>
+                          <span className="text-xs font-medium text-white/50">Seller Agent</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {msg.sellerData.action && ACTION_LABELS[msg.sellerData.action] && (
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${ACTION_LABELS[msg.sellerData.action].color}`}>
+                              {ACTION_LABELS[msg.sellerData.action].label}
+                            </span>
+                          )}
+                          <span className="text-[10px] text-white/20">
+                            R{Math.ceil((i + 1) / 2)}
+                          </span>
+                        </div>
                       </div>
-                      <span className="text-xs font-medium text-white/50">Seller Agent</span>
+
+                      <div className="mb-3 p-3 rounded-md bg-white/[0.03] border-l-2 border-amber-500/40">
+                        <div className="text-[10px] text-amber-500/60 uppercase tracking-wider mb-1 font-medium">
+                          Internal Reasoning
+                        </div>
+                        <p className="text-xs text-white/60 leading-relaxed">
+                          {msg.sellerData.internal_reasoning}
+                        </p>
+                      </div>
+
+                      <p className="text-sm text-white/80 leading-relaxed">
+                        {msg.sellerData.message}
+                      </p>
+
+                      <div className="flex items-center gap-3 mt-3 pt-3 border-t border-white/[0.04]">
+                        {msg.sellerData.products_discussed.length > 0 && (
+                          <div className="flex items-center gap-1">
+                            {msg.sellerData.products_discussed.map(p => (
+                              <span key={p} className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-white/40 font-mono">
+                                {p}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <div className="ml-auto flex items-center gap-3">
+                          <span className="text-[10px] text-white/30">
+                            Margin {msg.sellerData.effective_margin_percent}%
+                          </span>
+                          {msg.sellerData.discount_offered > 0 && (
+                            <span className="text-[10px] text-amber-400/60">
+                              -{msg.sellerData.discount_offered}%
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {msg.sellerData.action && ACTION_LABELS[msg.sellerData.action] && (
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${ACTION_LABELS[msg.sellerData.action].color}`}>
-                          {ACTION_LABELS[msg.sellerData.action].label}
-                        </span>
-                      )}
-                      <span className="text-[10px] text-white/20">
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-white/[0.04] bg-white/[0.01] p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-[10px] font-bold">
+                        B
+                      </div>
+                      <span className="text-xs font-medium text-white/50">Buyer Agent</span>
+                      <span className="text-[10px] text-white/20 ml-auto">
                         R{Math.ceil((i + 1) / 2)}
                       </span>
                     </div>
-                  </div>
-
-                  {/* Internal Reasoning - the key insight */}
-                  <div className="mb-3 p-3 rounded-md bg-white/[0.03] border-l-2 border-amber-500/40">
-                    <div className="text-[10px] text-amber-500/60 uppercase tracking-wider mb-1 font-medium">
-                      Internal Reasoning
-                    </div>
-                    <p className="text-xs text-white/60 leading-relaxed">
-                      {msg.sellerData.internal_reasoning}
+                    <p className="text-sm text-white/70 leading-relaxed">
+                      {msg.content}
                     </p>
                   </div>
-
-                  {/* Message to buyer */}
-                  <p className="text-sm text-white/80 leading-relaxed">
-                    {msg.sellerData.message}
-                  </p>
-
-                  {/* Metrics row */}
-                  <div className="flex items-center gap-3 mt-3 pt-3 border-t border-white/[0.04]">
-                    {msg.sellerData.products_discussed.length > 0 && (
-                      <div className="flex items-center gap-1">
-                        {msg.sellerData.products_discussed.map(p => (
-                          <span key={p} className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-white/40 font-mono">
-                            {p}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    <div className="ml-auto flex items-center gap-3">
-                      <span className="text-[10px] text-white/30">
-                        Margin {msg.sellerData.effective_margin_percent}%
-                      </span>
-                      {msg.sellerData.discount_offered > 0 && (
-                        <span className="text-[10px] text-amber-400/60">
-                          -{msg.sellerData.discount_offered}%
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                )}
               </div>
-            ) : (
-              /* Buyer message */
-              <div className="rounded-lg border border-white/[0.04] bg-white/[0.01] p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-[10px] font-bold">
-                    B
-                  </div>
-                  <span className="text-xs font-medium text-white/50">Buyer Agent</span>
-                  <span className="text-[10px] text-white/20 ml-auto">
-                    R{Math.ceil((i + 1) / 2)}
-                  </span>
+            ))}
+
+            {isNegotiating && (
+              <div className="flex items-center gap-2 py-2">
+                <div className="flex gap-1">
+                  <div className="w-1.5 h-1.5 rounded-full bg-white/30 animate-bounce [animation-delay:0ms]" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-white/30 animate-bounce [animation-delay:150ms]" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-white/30 animate-bounce [animation-delay:300ms]" />
                 </div>
-                <p className="text-sm text-white/70 leading-relaxed">
-                  {msg.content}
-                </p>
+                <span className="text-xs text-white/30">Agents negotiating...</span>
               </div>
             )}
           </div>
-        ))}
+        )}
 
-        {isNegotiating && (
-          <div className="flex items-center gap-2 py-2">
-            <div className="flex gap-1">
-              <div className="w-1.5 h-1.5 rounded-full bg-white/30 animate-bounce [animation-delay:0ms]" />
-              <div className="w-1.5 h-1.5 rounded-full bg-white/30 animate-bounce [animation-delay:150ms]" />
-              <div className="w-1.5 h-1.5 rounded-full bg-white/30 animate-bounce [animation-delay:300ms]" />
-            </div>
-            <span className="text-xs text-white/30">Agents negotiating...</span>
-          </div>
+        {activeTab === 'catalog' && (
+          <CatalogPanel
+            products={products}
+            onUpdateProduct={onUpdateProduct}
+            onAddProduct={onAddProduct}
+            onRemoveProduct={onRemoveProduct}
+          />
+        )}
+
+        {activeTab === 'policies' && (
+          <PoliciesPanel
+            policies={policies}
+            onUpdate={onUpdatePolicies}
+          />
         )}
       </div>
     </div>

@@ -1,5 +1,5 @@
-import { BUYER_SYSTEM_PROMPT, SELLER_SYSTEM_PROMPT } from './prompts';
-import { SellerResponse, NegotiationMessage } from './types';
+import { BUYER_SYSTEM_PROMPT, buildSellerSystemPrompt } from './prompts';
+import { SellerResponse, NegotiationMessage, Product, BrandPolicies } from './types';
 
 const MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions';
 const SELLER_MODEL = 'mistral-large-latest';
@@ -39,16 +39,13 @@ async function callMistral(
 }
 
 function parseSellerResponse(text: string): SellerResponse {
-  // Try to extract JSON from the response
   let jsonStr = text;
 
-  // Remove markdown code blocks if present
   const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (jsonMatch) {
     jsonStr = jsonMatch[1].trim();
   }
 
-  // Try to find JSON object in the text
   const objMatch = jsonStr.match(/\{[\s\S]*\}/);
   if (objMatch) {
     jsonStr = objMatch[0];
@@ -57,7 +54,6 @@ function parseSellerResponse(text: string): SellerResponse {
   try {
     return JSON.parse(jsonStr);
   } catch {
-    // Fallback if JSON parsing fails
     return {
       message: text,
       internal_reasoning: 'Response was not in expected JSON format.',
@@ -72,10 +68,13 @@ function parseSellerResponse(text: string): SellerResponse {
 
 export async function callSellerAgent(
   apiKey: string,
-  conversationHistory: NegotiationMessage[]
+  conversationHistory: NegotiationMessage[],
+  products: Product[],
+  policies: BrandPolicies
 ): Promise<SellerResponse> {
+  const sellerPrompt = buildSellerSystemPrompt(products, policies);
   const messages: MistralMessage[] = [
-    { role: 'system', content: SELLER_SYSTEM_PROMPT },
+    { role: 'system', content: sellerPrompt },
   ];
 
   for (const msg of conversationHistory) {
@@ -117,7 +116,6 @@ export async function callBuyerAgent(
       content: `The user originally asked: "${userRequest}"\n\nHere's the full negotiation history:\n${conversationHistory.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n')}\n\nThe negotiation has concluded. The seller's final response was:\n${JSON.stringify(lastSellerMsg?.sellerData)}\n\nPlease summarize the outcome for the user in a friendly, helpful way. Include: what was recommended, original price, final price (if discounted), and why this product works for them. Be concise but warm.`,
     });
   } else {
-    // Buyer evaluating seller's response
     const lastSellerMsg = conversationHistory
       .filter(m => m.role === 'seller')
       .pop();
@@ -134,6 +132,8 @@ export async function callBuyerAgent(
 export async function runNegotiation(
   apiKey: string,
   userRequest: string,
+  products: Product[],
+  policies: BrandPolicies,
   onMessage: (msg: NegotiationMessage) => void,
   onComplete: (summary: string) => void,
   onError: (error: string) => void
@@ -154,7 +154,7 @@ export async function runNegotiation(
 
     for (let round = 0; round < maxRounds; round++) {
       // Seller responds
-      const sellerResponse = await callSellerAgent(apiKey, history);
+      const sellerResponse = await callSellerAgent(apiKey, history, products, policies);
       const sellerMsg: NegotiationMessage = {
         role: 'seller',
         content: sellerResponse.message,
@@ -169,11 +169,10 @@ export async function runNegotiation(
         break;
       }
 
-      // Buyer evaluates and responds (unless it's the last round)
+      // Buyer evaluates and responds
       if (round < maxRounds - 1) {
         const buyerReply = await callBuyerAgent(apiKey, userRequest, history, false, false);
 
-        // Check if buyer is accepting
         const isAccepting = buyerReply.toLowerCase().includes('accept') &&
           (buyerReply.toLowerCase().includes('deal') || buyerReply.toLowerCase().includes('offer'));
 
@@ -186,8 +185,7 @@ export async function runNegotiation(
         onMessage(buyerReplyMsg);
 
         if (isAccepting) {
-          // Get final seller confirmation
-          const finalSeller = await callSellerAgent(apiKey, history);
+          const finalSeller = await callSellerAgent(apiKey, history, products, policies);
           const finalSellerMsg: NegotiationMessage = {
             role: 'seller',
             content: finalSeller.message,

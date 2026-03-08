@@ -96,8 +96,8 @@ export default function ChatPanel({
               <div className="grid grid-cols-1 gap-2">
                 {[
                   'I want anti-aging serum but my budget is $45',
-                  'I need a full skincare routine for dry skin',
-                  'What do you have for dark spots under $40?',
+                  'I bought your retinol cream and I\'m breaking out, I want a refund',
+                  'Why should I buy this when The Ordinary is $12?',
                 ].map((suggestion) => (
                   <button
                     key={suggestion}

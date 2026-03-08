@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import ChatPanel from '@/components/ChatPanel';
 import DashboardPanel from '@/components/DashboardPanel';
-import { ChatMessage, NegotiationMessage } from '@/lib/types';
+import { ChatMessage, NegotiationMessage, Product, BrandPolicies, DEFAULT_PRODUCTS, DEFAULT_POLICIES } from '@/lib/types';
 import { runNegotiation } from '@/lib/agents';
 
 export default function Home() {
@@ -12,11 +12,28 @@ export default function Home() {
   const [negotiationMessages, setNegotiationMessages] = useState<NegotiationMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isNegotiating, setIsNegotiating] = useState(false);
+  const [products, setProducts] = useState<Product[]>(DEFAULT_PRODUCTS);
+  const [policies, setPolicies] = useState<BrandPolicies>(DEFAULT_POLICIES);
+
+  const handleUpdateProduct = useCallback((index: number, product: Product) => {
+    setProducts(prev => {
+      const next = [...prev];
+      next[index] = product;
+      return next;
+    });
+  }, []);
+
+  const handleAddProduct = useCallback((product: Product) => {
+    setProducts(prev => [...prev, product]);
+  }, []);
+
+  const handleRemoveProduct = useCallback((index: number) => {
+    setProducts(prev => prev.filter((_, i) => i !== index));
+  }, []);
 
   const handleSend = useCallback(async (message: string) => {
     if (!apiKey.trim()) return;
 
-    // Add user message to chat
     const userMsg: ChatMessage = {
       role: 'user',
       content: message,
@@ -30,11 +47,11 @@ export default function Home() {
     await runNegotiation(
       apiKey,
       message,
-      // onMessage - each negotiation exchange
+      products,
+      policies,
       (msg: NegotiationMessage) => {
         setNegotiationMessages(prev => [...prev, msg]);
       },
-      // onComplete - final summary for user
       (summary: string) => {
         setChatMessages(prev => [
           ...prev,
@@ -47,7 +64,6 @@ export default function Home() {
         setIsLoading(false);
         setIsNegotiating(false);
       },
-      // onError
       (error: string) => {
         setChatMessages(prev => [
           ...prev,
@@ -61,7 +77,7 @@ export default function Home() {
         setIsNegotiating(false);
       }
     );
-  }, [apiKey]);
+  }, [apiKey, products, policies]);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden">
@@ -71,6 +87,12 @@ export default function Home() {
           <DashboardPanel
             messages={negotiationMessages}
             isNegotiating={isNegotiating}
+            products={products}
+            policies={policies}
+            onUpdateProduct={handleUpdateProduct}
+            onAddProduct={handleAddProduct}
+            onRemoveProduct={handleRemoveProduct}
+            onUpdatePolicies={setPolicies}
           />
         </div>
       </div>
