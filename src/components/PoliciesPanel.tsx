@@ -13,7 +13,7 @@ export default function PoliciesPanel({ policies, onUpdate }: PoliciesPanelProps
   };
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
+    <div className="h-full overflow-y-auto px-6 py-4 space-y-6">
       {/* Discount Rules */}
       <div>
         <h3 className="text-xs font-medium text-white/50 uppercase tracking-wider mb-3">
